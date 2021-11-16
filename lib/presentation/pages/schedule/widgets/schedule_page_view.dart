@@ -1,12 +1,16 @@
+import 'dart:collection';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:rtu_mirea_app/common/calendar.dart';
 import 'package:rtu_mirea_app/domain/entities/lesson.dart';
+import 'package:rtu_mirea_app/domain/entities/lesson_app_info.dart';
 import 'package:rtu_mirea_app/domain/entities/schedule.dart';
 import 'package:rtu_mirea_app/domain/entities/schedule_settings.dart';
 import 'package:rtu_mirea_app/presentation/bloc/schedule_bloc/schedule_bloc.dart';
 import 'package:rtu_mirea_app/presentation/colors.dart';
 import 'package:rtu_mirea_app/presentation/pages/schedule/widgets/empty_lesson_card.dart';
+import 'package:rtu_mirea_app/presentation/pages/schedule/widgets/lesson_card_info_modal.dart';
 import 'package:rtu_mirea_app/presentation/theme.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
@@ -34,6 +38,9 @@ class _SchedulePageViewState extends State<SchedulePageView> {
   final DateTime _lastCalendarDay =
       DateTime.utc(2021, 12, 19); // TODO: create method for it
 
+  late List<List<Lesson>> _allLessonsInWeek;
+  late Map<Lesson, LessonAppInfo> _lessonToAppInfo;
+
   @override
   void initState() {
     super.initState();
@@ -43,6 +50,8 @@ class _SchedulePageViewState extends State<SchedulePageView> {
     _controller = PageController(initialPage: _selectedPage);
     _selectedDay = DateTime.now();
     _selectedWeek = Calendar.getCurrentWeek();
+    _allLessonsInWeek = _getLessonsByWeek(_selectedWeek, widget.schedule);
+    //_lessonToAppInfo = _mapLessonsToAppInfo(_selectedWeek, widget.schedule);
     _calendarFormat = CalendarFormat.values[
         (BlocProvider.of<ScheduleBloc>(context).state as ScheduleLoaded)
             .scheduleSettings
@@ -61,6 +70,35 @@ class _SchedulePageViewState extends State<SchedulePageView> {
     }
 
     return lessonsInWeek;
+  }
+
+  Map<Lesson, LessonAppInfo> _mapLessonsToAppInfo(
+      int week, List<Lesson> lessons) {
+    final lessonToAppInfo = Map<Lesson, LessonAppInfo>();
+    for (int i = 0; i < lessons.length; i++) {
+      lessonToAppInfo[lessons[i]] = _getLessonAppInfo(lessons[i]);
+    }
+    return lessonToAppInfo;
+  }
+
+  LessonAppInfo _getLessonAppInfo(Lesson lesson) {
+    final lessonCode = _getLessonCode(lesson);
+    final info = BlocProvider.of<ScheduleBloc>(context).state as ScheduleLoaded;
+
+    /*if (!(info is ScheduleWithAppInfoLoaded))
+      return LessonAppInfo(lessonCode: lessonCode);*/
+
+    final appInfo = info.lessonsAppInfo.firstWhere(
+        (element) => element.lessonCode == lessonCode,
+        orElse: () => LessonAppInfo(lessonCode: lessonCode));
+
+    return appInfo;
+  }
+
+  String _getLessonCode(Lesson lesson) {
+    return (lesson.name.toString() +
+        lesson.timeStart.toString() +
+        _selectedDay.day.toString());
   }
 
   Widget _buildEmptyLessons() {
@@ -144,30 +182,46 @@ class _SchedulePageViewState extends State<SchedulePageView> {
         lessons = _getLessonsWithEmpty(lessons, state.activeGroup);
       }
 
-      return ListView.separated(
-        itemCount: lessons.length,
-        physics: const BouncingScrollPhysics(),
-        itemBuilder: (context, i) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: lessons[i].name.replaceAll(' ', '') != ''
-                ? LessonCard(
-                    name: lessons[i].name,
-                    timeStart: lessons[i].timeStart,
-                    timeEnd: lessons[i].timeEnd,
-                    room: lessons[i].rooms.join(', '),
-                    type: lessons[i].types,
-                    teacher: lessons[i].teachers.join(', '),
-                  )
-                : EmptyLessonCard(
-                    timeStart: lessons[i].timeStart,
-                    timeEnd: lessons[i].timeEnd,
-                  ),
-          );
-        },
-        separatorBuilder: (context, index) {
-          return const SizedBox(height: 8);
-        },
+      _lessonToAppInfo = _mapLessonsToAppInfo(_selectedWeek, lessons);
+
+      return Container(
+        child: ListView.separated(
+          itemCount: lessons.length,
+          itemBuilder: (context, i) {
+            return Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24),
+              child: lessons[i].name.replaceAll(' ', '') != ''
+                  ? LessonCard(
+                      name: lessons[i].name,
+                      timeStart: lessons[i].timeStart,
+                      timeEnd: lessons[i].timeEnd,
+                      room: '${lessons[i].rooms.join(', ')}',
+                      type: lessons[i].types,
+                      teacher: '${lessons[i].teachers.join(', ')}',
+                      drawNoteIndicator:
+                          _lessonToAppInfo[lessons[i]]!.note.isNotEmpty,
+                      onClick: () => {
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (context) => LessonCardInfoModal(
+                            lesson: lessons[i],
+                            lessonAppInfo: _lessonToAppInfo[lessons[i]]!,
+                          ),
+                        )
+                      },
+                    )
+                  : EmptyLessonCard(
+                      timeStart: lessons[i].timeStart,
+                      timeEnd: lessons[i].timeEnd,
+                    ),
+            );
+          },
+          separatorBuilder: (context, index) {
+            return SizedBox(height: 8);
+          },
+        ),
       );
     }
   }

@@ -37,12 +37,16 @@ class _SettingsSwitchButtonState extends State<SettingsSwitchButton> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              children: [
-                widget.svgPicture,
-                const SizedBox(width: 20),
-                Text(widget.text, style: DarkTextTheme.buttonL),
-              ],
+            Expanded(
+              child: Row(
+                children: [
+                  widget.svgPicture,
+                  const SizedBox(width: 20),
+                  Expanded(
+                    child: Text(widget.text, style: DarkTextTheme.buttonL),
+                  ),
+                ],
+              ),
             ),
             Padding(
               padding: const EdgeInsets.only(right: 8),
